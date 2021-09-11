@@ -3,20 +3,20 @@
     "id": "3f902553-338e-f4c0-bc03-6230ff5e4db8",
     "detail-type": "Step Functions Execution Status Change",
     "source": "aws.states",
-    "account": "xxxxxxxxxxxx",
+    "account": "aaaaaaaaaaaa",
     "time": "2021-05-06T15:37:55Z",
     "region": "ap-southeast-1",
     "resources": [
-        "arn:aws:states:ap-southeast-1:xxxxxxxxxxxx:execution:devops-rds-snapshot-state-machine:ca4e8414-4f18-4291-7d33-353cd6f3ad63_3e75e8bd-9b02-4837-1b34-783038436819"
+        "arn:aws:states:ap-southeast-1:aaaaaaaaaaaa:execution:devops-rds-snapshot-state-machine:ca4e8414-4f18-4291-7d33-353cd6f3ad63_3e75e8bd-9b02-4837-1b34-783038436819"
     ],
     "detail": {
-        "executionArn": "arn:aws:states:ap-southeast-1:xxxxxxxxxxxx:execution:devops-rds-snapshot-state-machine:ca4e8414-4f18-4291-7d33-353cd6f3ad63_3e75e8bd-9b02-4837-1b34-783038436819",
-        "stateMachineArn": "arn:aws:states:ap-southeast-1:xxxxxxxxxxxx:stateMachine:devops-rds-snapshot-state-machine",
+        "executionArn": "arn:aws:states:ap-southeast-1:aaaaaaaaaaaa:execution:devops-rds-snapshot-state-machine:ca4e8414-4f18-4291-7d33-353cd6f3ad63_3e75e8bd-9b02-4837-1b34-783038436819",
+        "stateMachineArn": "arn:aws:states:ap-southeast-1:aaaaaaaaaaaa:stateMachine:devops-rds-snapshot-state-machine",
         "name": "ca4e8414-4f18-4291-7d33-353cd6f3ad63_3e75e8bd-9b02-4837-1b34-783038436819",
         "status": "SUCCEEDED",
         "startDate": 1620314816023,
         "stopDate": 1620315475005,
-        "input": "{\"version\":\"0\",\"id\":\"ca4e8414-4f18-4291-7d33-353cd6f3ad63\",\"detail-type\":\"Backup Job State Change\",\"source\":\"aws.backup\",\"account\":\"xxxxxxxxxxxx\",\"time\":\"2021-05-06T15:26:55Z\",\"region\":\"ap-southeast-1\",\"resources\":[\"arn:aws:rds:ap-southeast-1:xxxxxxxxxxxx:snapshot:awsbackup:job-56432c60-c1ca-43e8-bd1c-7a16ac35141c\"],\"detail\":{\"backupJobId\":\"56432c60-c1ca-43e8-bd1c-7a16ac35141c\",\"backupSizeInBytes\":\"0\",\"backupVaultArn\":\"arn:aws:backup:ap-southeast-1:xxxxxxxxxxxx:backup-vault:Default\",\"backupVaultName\":\"Default\",\"bytesTransferred\":\"0\",\"creationDate\":\"2021-05-06T14:49:12.805Z\",\"iamRoleArn\":\"arn:aws:iam::xxxxxxxxxxxx:role/service-role/AWSBackupDefaultServiceRole\",\"resourceArn\":\"arn:aws:rds:ap-southeast-1:xxxxxxxxxxxx:db:test-postgres\",\"resourceType\":\"RDS\",\"state\":\"COMPLETED\",\"completionDate\":\"2021-05-06T15:19:04.034Z\",\"startBy\":\"2021-05-06T15:49:12.805Z\",\"percentDone\":100.0}}",
+        "input": "{\"version\":\"0\",\"id\":\"ca4e8414-4f18-4291-7d33-353cd6f3ad63\",\"detail-type\":\"Backup Job State Change\",\"source\":\"aws.backup\",\"account\":\"aaaaaaaaaaaa\",\"time\":\"2021-05-06T15:26:55Z\",\"region\":\"ap-southeast-1\",\"resources\":[\"arn:aws:rds:ap-southeast-1:aaaaaaaaaaaa:snapshot:awsbackup:job-56432c60-c1ca-43e8-bd1c-7a16ac35141c\"],\"detail\":{\"backupJobId\":\"56432c60-c1ca-43e8-bd1c-7a16ac35141c\",\"backupSizeInBytes\":\"0\",\"backupVaultArn\":\"arn:aws:backup:ap-southeast-1:aaaaaaaaaaaa:backup-vault:Default\",\"backupVaultName\":\"Default\",\"bytesTransferred\":\"0\",\"creationDate\":\"2021-05-06T14:49:12.805Z\",\"iamRoleArn\":\"arn:aws:iam::aaaaaaaaaaaa:role/service-role/AWSBackupDefaultServiceRole\",\"resourceArn\":\"arn:aws:rds:ap-southeast-1:aaaaaaaaaaaa:db:test-postgres\",\"resourceType\":\"RDS\",\"state\":\"COMPLETED\",\"completionDate\":\"2021-05-06T15:19:04.034Z\",\"startBy\":\"2021-05-06T15:49:12.805Z\",\"percentDone\":100.0}}",
         "inputDetails": {
             "included": true
         },

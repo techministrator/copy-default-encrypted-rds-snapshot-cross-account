@@ -8,4 +8,4 @@ s3_prefix = "devops-copy-default-encrypted-rds-snapshot-to-backup-account"
 region = "ap-southeast-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_NAMED_IAM"
-parameter_overrides = "ResourcePrefix=\"devops\" BackupAccountId=\"668813846055\" BackupAccountKmsArn=\"arn:aws:kms:ap-southeast-1:668813846055:key/53d1f257-d5c9-4c93-b694-219f60eb35ec\" BackupAccountRoleArn=\"arn:aws:iam::668813846055:role/main-rds-account-iam-role\""
+parameter_overrides = "ResourcePrefix=\"devops\" BackupAccountId=\"bbbbbbbbbbbb\" BackupAccountKmsArn=\"arn:aws:kms:ap-southeast-1:bbbbbbbbbbbb:key/53d1f257-d5c9-4c93-b694-219f60eb35ec\" BackupAccountRoleArn=\"arn:aws:iam::bbbbbbbbbbbb:role/main-rds-account-iam-role\""

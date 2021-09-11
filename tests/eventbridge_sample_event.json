@@ -3,21 +3,21 @@
     "id": "85b217b9-936a-0898-6c61-f70b1b1819ab",
     "detail-type": "Backup Job State Change",
     "source": "aws.backup",
-    "account": "xxxxxxxxxxxx",
+    "account": "aaaaaaaaaaaa",
     "time": "2021-04-17T06:47:22Z",
     "region": "ap-southeast-1",
     "resources": [
-        "arn:aws:rds:ap-southeast-1:xxxxxxxxxxxx:snapshot:awsbackup:job-bf107451-9453-433f-be60-a19ee90259c2"
+        "arn:aws:rds:ap-southeast-1:aaaaaaaaaaaa:snapshot:awsbackup:job-bf107451-9453-433f-be60-a19ee90259c2"
     ],
     "detail": {
         "backupJobId": "bf107451-9453-433f-be60-a19ee90259c2",
         "backupSizeInBytes": "0",
-        "backupVaultArn": "arn:aws:backup:ap-southeast-1:xxxxxxxxxxxx:backup-vault:Default",
+        "backupVaultArn": "arn:aws:backup:ap-southeast-1:aaaaaaaaaaaa:backup-vault:Default",
         "backupVaultName": "Default",
         "bytesTransferred": "0",
         "creationDate": "2021-04-17T06:35:35.584Z",
-        "iamRoleArn": "arn:aws:iam::xxxxxxxxxxxx:role/service-role/AWSBackupDefaultServiceRole",
-        "resourceArn": "arn:aws:rds:ap-southeast-1:xxxxxxxxxxxx:db:test-db",
+        "iamRoleArn": "arn:aws:iam::aaaaaaaaaaaa:role/service-role/AWSBackupDefaultServiceRole",
+        "resourceArn": "arn:aws:rds:ap-southeast-1:aaaaaaaaaaaa:db:test-db",
         "resourceType": "RDS",
         "state": "COMPLETED",
         "completionDate": "2021-04-17T06:41:30.262Z",

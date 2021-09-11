@@ -1,4 +1,4 @@
-# copy-default-encrypted-rds-snapshot-to-other-aws-account
+# copy-default-encrypted-rds-snapshot-to-cross-account
 
 This serverless application is purposedly made for the scenario when you have many RDS Databases are already **encrypted with the default KMS key** (`aws/kms`) and want to share/copy the RDS Snapshots (which also encrypted with `aws/kms`) to another AWS account. Using the default KMS key, you can't share the snapshot with another account. So this simple app is aiming to solve that problem. 
 
@@ -46,7 +46,7 @@ $ aws cloudformation create-stack --stack-name devops-shared-kms-and-cross-acc-i
 --capabilities CAPABILITY_NAMED_IAM \
 --template-body file://required_aws_resources_kms_and_iam_role.yml \
 --parameters ParameterKey=KeyAdministratorIamUserName,ParameterValue='quangluong' \
-ParameterKey=MainRdsAccountId,ParameterValue='xxxxxxxxxxxx' \
+ParameterKey=MainRdsAccountId,ParameterValue='aaaaaaaaaaaa' \
 --profile backup-account
 
 # Please change the parameter values appropriately for your AWS environment
