@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  This sample template provides CFN code to create a KMS Symmetric CMK and Cross Account IAM Role used by Main RDS Account. 
+  Warning! Please make sure to edit the below options to match with your AWS Environment Security Standard!
+
+Parameters:
+  KeyAdministratorIamUserName:
+    Type: String
+    Default: 'admin'
+  MainRdsAccountId:
+    Type: String
+    ConstraintDescription: 'Required'
+
+Resources: 
+  KmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: An example symmetric CMK
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-used-by-main-rds-account-to-share-rds-snapshot-to-this-account
+        Statement:
+        - Sid: EnableIamUserPermissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+          Action: kms:*
+          Resource: '*'
+        - Sid: AllowAdministration
+          Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/${KeyAdministratorIamUserName}'
+          Action:
+          - kms:Create*
+          - kms:Describe*
+          - kms:Enable*
+          - kms:List*
+          - kms:Put*
+          - kms:Update*
+          - kms:Revoke*
+          - kms:Disable*
+          - kms:Get*
+          - kms:Delete*
+          - kms:ScheduleKeyDeletion
+          - kms:CancelKeyDeletion
+          Resource: '*'
+        - Sid: AllowBackupAccountToUseThisKey
+          Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:aws:iam::${MainRdsAccountId}:root'
+          Action:
+          - kms:DescribeKey
+          - kms:Encrypt
+          - kms:Decrypt
+          - kms:ReEncrypt*
+          - kms:GenerateDataKey*
+          Resource: '*'
+        - Sid: Allow attachment of persistent resources
+          Effect: Allow
+          Principal:
+            AWS:
+            - !Sub 'arn:aws:iam::${AWS::AccountId}:user/${KeyAdministratorIamUserName}'
+            - !Sub 'arn:aws:iam::${MainRdsAccountId}:root'
+          Action:
+          - kms:CreateGrant
+          - kms:ListGrants
+          - kms:RevokeGrant
+          Resource: "*"
+          Condition:
+            Bool:
+              kms:GrantIsForAWSResource: 'true'
+
+  MainRdsAccountIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: 'main-rds-account-iam-role'
+      MaxSessionDuration: 43200
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${MainRdsAccountId}:root'
+      Policies:
+        - PolicyName: !Sub 'main-rds-account-iam-role-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowRdsSnapshotCopyAndDelete
+                Effect: Allow
+                Action: 
+                - rds:Describe*
+                - rds:CopyDBParameterGroup
+                - rds:CopyDBSnapshot
+                - rds:AddTagsToResource
+                - rds:ListTagsForResource
+                - rds:ModifyDBSnapshot
+                - rds:ModifyDBSnapshotAttribute
+                - rds:DeleteDBSnapshot
+                Resource: '*'
+              - Sid: AllowCrossAccountLambdaFunctionUseKmsWhenAssumeRole
+                Effect: Allow
+                Action:
+                - kms:DescribeKey
+                - kms:Encrypt
+                - kms:Decrypt
+                - kms:ReEncrypt*
+                - kms:GenerateDataKey*
+                - kms:CreateGrant
+                - kms:ListGrants
+                - kms:RevokeGrant
+                Resource: !Sub '${KmsKey.Arn}'
+
+Outputs: 
+  KmsKeyArn:
+    Description: "KmsKey ARN"
+    Value: !Sub ${KmsKey.Arn}
+  MainRdsAccountIamRoleArn:
+    Description: 'Cross Account IAM Role for Main RDS Account'
+    Value: !Sub ${MainRdsAccountIamRole.Arn}

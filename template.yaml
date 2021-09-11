@@ -1,0 +1,449 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  Serverless Application that deploys a State Machine with set of Functions that can copy the AWS Backup RDS Snapshots encrypted with default kms key (aws/rds)
+  from this AWS Account to the other AWS account with a different KMS CMK.
+
+Parameters:
+  ResourcePrefix:
+    Type: String 
+    Default: 'devops'
+  BackupAccountId:
+    Type: String
+  BackupAccountKmsArn:  # Make sure that Backup Account KMS Key Policy has allowed this Account to use
+    Type: String
+  BackupAccountRoleArn:
+    Type: String
+  SlackWebhookUrl:
+    Type: String
+    Default: ''
+    ConstraintDescription: 'Leave blank if do not use'
+    NoEcho: True
+
+Conditions:
+  UseSlackWebhook: !Not [!Equals [!Ref SlackWebhookUrl, '']]
+
+Globals:
+  Function:
+    Handler: function.lambda_handler
+    MemorySize: 128
+    Runtime: python3.8
+    Timeout: 30
+
+Resources:
+  SnapshotStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub '${ResourcePrefix}-rds-snapshot-state-machine'
+      DefinitionUri: state-machine/state_machine_def.json
+      DefinitionSubstitutions:
+        CopyRdsSnapshotFunctionArn: !Sub ${CopyRdsSnapshotFunction.Arn}
+        CheckRdsSnapshotStatusFunctionArn: !Sub ${CheckRdsSnapshotStatusFunction.Arn}
+        ShareRdsSnapshotFunctionArn: !Sub ${ShareRdsSnapshotFunction.Arn}
+        CrossAccCopySharedRdsSnapshotFunctionArn: !Sub ${CrossAccCopySharedRdsSnapshotFunction.Arn}
+        CrossAccCheckCopiedSharedRdsSnapshotFunctionArn: !Sub ${CrossAccCheckCopiedSharedRdsSnapshotFunction.Arn}
+        DeleteRdsSnapshotFunctionArn: !Sub ${DeleteRdsSnapshotFunction.Arn}
+      Events:
+        AwsBackupSnapshot:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - aws.backup
+              detail-type:
+                - Backup Job State Change
+              detail:
+                state:
+                  - COMPLETED
+                resourceType:
+                  - RDS  # This will trigger event aws backup events for all rds databases. Uncomment this only if you want specific databases, not all. 
+                #resourceArn: 
+                #  - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:database-name-1' 
+                #  - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:database-name-2'
+      Policies: 
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CopyRdsSnapshotFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CheckRdsSnapshotStatusFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ShareRdsSnapshotFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CrossAccCopySharedRdsSnapshotFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CrossAccCheckCopiedSharedRdsSnapshotFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref DeleteRdsSnapshotFunction
+
+  CopyRdsSnapshotFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-copy-rds-snapshot'
+      CodeUri: functions/copy-rds-snapshot/
+      Role: !Sub ${CopyRdsSnapshotFunctionRole.Arn}
+      Environment:
+        Variables:
+          BACKUP_ACCOUNT_KMS_ARN: !Ref BackupAccountKmsArn
+
+  CopyRdsSnapshotFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-copy-rds-snapshot-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: !Sub lambda.${AWS::URLSuffix}
+      Policies:
+        - PolicyName: !Sub '${ResourcePrefix}-copy-rds-snapshot-role-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CreateLogGroup
+                Effect: Allow
+                Action: logs:CreateLogGroup
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Sid: CreateLogStream
+                Effect: Allow
+                Action:
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-copy-rds-snapshot:*'
+              - Sid: ReadDbAndCopySnapshots
+                Effect: Allow
+                Action:
+                - rds:Describe*
+                - rds:CopyDBParameterGroup
+                - rds:AddTagsToResource
+                - rds:CopyDBSnapshot
+                - rds:ListTagsForResource
+                Resource: "*"
+              - Sid: AllowFunctionToUseKmsInBackupAccount 
+                Effect: Allow
+                Action:
+                - kms:*
+                Resource: !Ref BackupAccountKmsArn  # Make sure that Backup Account KMS Key Policy has allowed this Account to use
+
+  CheckRdsSnapshotStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-check-rds-snapshot-status'
+      CodeUri: functions/check-rds-snapshot-status/
+      Role: !Sub ${CheckRdsSnapshotStatusFunctionRole.Arn}
+
+  CheckRdsSnapshotStatusFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-check-rds-snapshot-status-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: !Sub lambda.${AWS::URLSuffix}
+      Policies:
+        - PolicyName: !Sub '${ResourcePrefix}-check-rds-snapshot-status-role-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CreateLogGroup
+                Effect: Allow
+                Action: logs:CreateLogGroup
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Sid: CreateLogStream
+                Effect: Allow
+                Action:
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-check-rds-snapshot-status:*'
+              - Sid: DescribeDBSnapshot
+                Effect: Allow
+                Action:
+                - rds:DescribeDBSnapshots
+                - rds:ListTagsForResource
+                Resource: "*"
+
+  ShareRdsSnapshotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-share-rds-snapshot'
+      Role: !Sub ${ShareRdsSnapshotFunctionRole.Arn}
+      CodeUri: functions/share-rds-snapshot/
+      Environment:
+        Variables:
+          BACKUP_ACCOUNT_ID: !Ref BackupAccountId
+
+  ShareRdsSnapshotFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-share-rds-snapshot-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: !Sub lambda.${AWS::URLSuffix}
+      Policies:
+        - PolicyName: !Sub '${ResourcePrefix}-share-rds-snapshot-role-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CreateLogGroup
+                Effect: Allow
+                Action: logs:CreateLogGroup
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Sid: CreateLogStream
+                Effect: Allow
+                Action:
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-share-rds-snapshot:*'
+              - Sid: ReadDbAndCopySnapshots
+                Effect: Allow
+                Action:
+                - rds:Describe*
+                - rds:ModifyDBSnapshot
+                - rds:ModifyDBSnapshotAttribute
+                - rds:ListTagsForResource
+                Resource: '*'
+
+  CrossAccCopySharedRdsSnapshotFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-cross-acc-copy-shared-rds-snapshot'
+      CodeUri: functions/cross-acc-copy-shared-rds-snapshot/
+      Role: !Sub ${CrossAccCopySharedRdsSnapshotFunctionRole.Arn}
+      Environment:
+        Variables:
+          BACKUP_ACCOUNT_ID: !Ref BackupAccountId
+          BACKUP_ACCOUNT_KMS_ARN: !Ref BackupAccountKmsArn
+          BACKUP_ACCOUNT_ROLE_ARN: !Ref BackupAccountRoleArn
+          
+  CrossAccCopySharedRdsSnapshotFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-cross-acc-copy-shared-rds-snapshot-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: !Sub lambda.${AWS::URLSuffix}
+      Policies:
+        - PolicyName: !Sub '${ResourcePrefix}-cross-acc-copy-shared-rds-snapshot-role-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CreateLogGroup
+                Effect: Allow
+                Action: logs:CreateLogGroup
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Sid: CreateLogStream
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-cross-acc-copy-shared-rds-snapshot:*'
+              - Sid: AssumeBackupAccountRole
+                Effect: Allow
+                Action: 
+                  - sts:AssumeRole
+                Resource: !Sub ${BackupAccountRoleArn}
+
+  CrossAccCheckCopiedSharedRdsSnapshotFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-cross-acc-check-copied-shared-rds-snapshot'
+      CodeUri: functions/cross-acc-check-copied-shared-rds-snapshot/
+      Role: !Sub ${CrossAccCheckCopiedSharedRdsSnapshotFunctionRole.Arn}
+      Environment:
+        Variables:
+          BACKUP_ACCOUNT_ROLE_ARN: !Ref BackupAccountRoleArn
+          
+  CrossAccCheckCopiedSharedRdsSnapshotFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-cross-acc-check-copied-shared-rds-snapshot-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: !Sub lambda.${AWS::URLSuffix}
+      Policies:
+        - PolicyName: !Sub '${ResourcePrefix}-cross-acc-check-copied-shared-rds-snapshot-role-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CreateLogGroup
+                Effect: Allow
+                Action: logs:CreateLogGroup
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Sid: CreateLogStream
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-cross-acc-check-copied-shared-rds-snapshot:*'
+              - Sid: AssumeBackupAccountRole
+                Effect: Allow
+                Action: 
+                  - sts:AssumeRole
+                Resource: !Sub ${BackupAccountRoleArn}
+
+  DeleteRdsSnapshotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-delete-rds-snapshot'
+      Role: !Sub ${DeleteRdsSnapshotFunctionRole.Arn}
+      CodeUri: functions/delete-rds-snapshot/
+
+  DeleteRdsSnapshotFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-delete-rds-snapshot-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: !Sub lambda.${AWS::URLSuffix}
+      Policies:
+        - PolicyName: !Sub '${ResourcePrefix}-delete-rds-snapshot-role-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CreateLogGroup
+                Effect: Allow
+                Action: logs:CreateLogGroup
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Sid: CreateLogStream
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-delete-rds-snapshot:*'
+              - Sid: DeleteDBSnapshots
+                Effect: Allow
+                Action:
+                  - rds:Describe*
+                  - rds:DeleteDBSnapshot
+                  - rds:ListTagsForResource
+                Resource: 
+                  - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:snapshot:*'
+                
+  ## Step Functions Execution Notification
+  SnapshotStateMachineEvent: 
+    Type: AWS::Events::Rule
+    Properties: 
+      Name: !Sub '${ResourcePrefix}-snapshot-state-machine-event'
+      Description: 'Events from the Snapshot State Machine in Step Functions'
+      EventPattern: 
+        source:
+          - aws.states
+        detail-type:
+          - Step Functions Execution Status Change
+        detail:
+          status:
+            - FAILED
+            - ABORTED
+            - TIMED_OUT
+            - SUCCEEDED
+          stateMachineArn:
+            - !Sub ${SnapshotStateMachine.Arn}
+      State: 'ENABLED'
+      Targets: 
+        - Arn: !Ref SnapshotStateMachineSnsTopic
+          Id: 'SnapshotStateMachineSnsTopic'
+
+  SnapshotStateMachineSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ResourcePrefix}-snapshot-state-machine-noti'
+  SnapshotStateMachineSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'sns:Publish'
+            Resource: '*'
+      Topics:
+        - !Ref SnapshotStateMachineSnsTopic
+
+  SnapshotStateMachineSlackNotiFunction:
+    Type: AWS::Serverless::Function 
+    Condition: UseSlackWebhook
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-snapshot-state-machine-slack-noti'
+      CodeUri: other/send-state-machine-slack-noti/
+      Role: !Sub ${SnapshotStateMachineSlackNotiFunctionRole.Arn}
+      Environment:
+        Variables:
+          SLACK_WEBHOOK_URL: !Ref SlackWebhookUrl
+      Events:
+        Event:  # Snapshot State Machine Event Rule
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - aws.states
+              detail-type:
+                - Step Functions Execution Status Change
+              detail:
+                status:
+                  - FAILED
+                  - ABORTED
+                  - TIMED_OUT
+                  - SUCCEEDED
+                stateMachineArn:
+                  - !Sub ${SnapshotStateMachine.Arn}
+          
+  SnapshotStateMachineSlackNotiFunctionRole:
+    Type: AWS::IAM::Role
+    Condition: UseSlackWebhook
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-snapshot-state-machine-slack-noti-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: !Sub lambda.${AWS::URLSuffix}
+      Policies:
+        - PolicyName: !Sub '${ResourcePrefix}-snapshot-state-machine-slack-noti-role-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CreateLogGroup
+                Effect: Allow
+                Action: logs:CreateLogGroup
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Sid: CreateLogStream
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-snapshot-state-machine-slack-noti:*'
+
+Outputs:
+  SnapshotStateMachineArn:
+    Description: "Copy & Share RDS Snapshot State Machine ARN"
+    Value: !Ref SnapshotStateMachine
+  SnapshotStateMachineRoleArn:
+    Description: "IAM Role created for Copy & Share RDS Snapshot State Machine based on the specified SAM Policy Templates"
+    Value: !Sub ${SnapshotStateMachineRole.Arn}
+  SnapshotStateMachineSnsTopic:
+    Description: "Snapshot State Machine SNS Topic ARN"
+    Value: !Ref SnapshotStateMachineSnsTopic

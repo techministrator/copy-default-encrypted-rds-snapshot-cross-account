@@ -1,0 +1,93 @@
+{
+    "Comment": "Trigger Lambda Function when EventBridge sends event",
+    "StartAt": "CopyRdsSnapshot",
+    "States": {
+        "CopyRdsSnapshot": {
+            "Comment": "Copy AWS Backup Snapshot to RDS Snapshot using Backup Account's KMS Key",
+            "Type": "Task",
+            "Resource": "${CopyRdsSnapshotFunctionArn}",
+            "ResultPath": "$",
+            "Next": "WaitRdsSnapshotCompleted"
+        },
+        "WaitRdsSnapshotCompleted": {
+            "Type": "Wait",
+            "Seconds": 300,
+            "Next": "CheckRdsSnapshotStatus"
+        },
+        "CheckRdsSnapshotStatus": {
+            "Comment": "Get RDS Snapshot Copy Status",
+            "Type": "Task",
+            "Resource": "${CheckRdsSnapshotStatusFunctionArn}",
+            "Next": "SnapshotStatus"
+        },
+        "SnapshotStatus": {
+            "Type": "Choice",
+            "Default": "FailedState",
+            "Choices": [
+                {
+                    "Comment": "Still Creating",
+                    "Variable": "$.DBSnapshot.Status",
+                    "StringEquals": "creating",
+                    "Next": "WaitRdsSnapshotCompleted"
+                },
+                {
+                    "Comment": "Snapshot Created Successfully",
+                    "Variable": "$.DBSnapshot.Status",
+                    "StringEquals": "available",
+                    "Next": "ShareRdsSnapshot"
+                }
+            ]
+        },
+        "FailedState": {
+            "Type": "Fail",
+            "Cause": "Snapshot is not copied successfully"
+        },
+        "ShareRdsSnapshot": {
+            "Comment": "Share RDS Snapshot if it's copied successfully",
+            "Type": "Task",
+            "Resource": "${ShareRdsSnapshotFunctionArn}",
+            "Next": "CrossAccCopySharedRdsSnapshot"
+        },
+        "CrossAccCopySharedRdsSnapshot": {
+            "Comment": "Cross Account Copy Shared RDS Snapshot",
+            "Type": "Task",
+            "Resource": "${CrossAccCopySharedRdsSnapshotFunctionArn}",
+            "Next": "WaitCrossAccountRdsSnapshotCompleted"
+        },
+        "WaitCrossAccountRdsSnapshotCompleted": {
+            "Type": "Wait",
+            "Seconds": 300,
+            "Next": "CrossAccCheckCopiedSharedRdsSnapshot"
+        },
+        "CrossAccCheckCopiedSharedRdsSnapshot": {
+            "Comment": "Get Cross Account RDS Snapshot Copy Status",
+            "Type": "Task",
+            "Resource": "${CrossAccCheckCopiedSharedRdsSnapshotFunctionArn}",
+            "Next": "CrossAccountSnapshotStatus"
+        },
+        "CrossAccountSnapshotStatus": {
+            "Type": "Choice",
+            "Default": "FailedState",
+            "Choices": [
+                {
+                    "Comment": "Still Creating",
+                    "Variable": "$.DBSnapshot.Status",
+                    "StringEquals": "creating",
+                    "Next": "WaitCrossAccountRdsSnapshotCompleted"
+                },
+                {
+                    "Comment": "Snapshot Created Successfully",
+                    "Variable": "$.DBSnapshot.Status",
+                    "StringEquals": "available",
+                    "Next": "DeleteRdsSnapshot"
+                }
+            ]
+        },
+        "DeleteRdsSnapshot": {
+            "Comment": "Delete Local RDS Snapshot after copied to Back Account",
+            "Type": "Task",
+            "Resource": "${DeleteRdsSnapshotFunctionArn}",
+            "End": true
+        }
+    }
+}

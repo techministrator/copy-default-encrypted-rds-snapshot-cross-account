@@ -1,0 +1,13 @@
+{
+  "source": ["aws.backup"],
+  "detail-type": ["Backup Job State Change"],
+  "detail": {
+    "state": [
+      "COMPLETED",
+      "FAILED"
+    ],
+    "resourceType": [
+      "RDS"
+    ]
+  }
+}
